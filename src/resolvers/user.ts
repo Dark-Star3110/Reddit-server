@@ -8,7 +8,7 @@ import {
   Resolver,
   Root,
 } from "type-graphql";
-import argon2 from "argon2";
+import bcrypt from "bcrypt";
 import { UserMutationResponse } from "../types/UserMutationResponse";
 import { RegisterInput } from "../types/RegisterInput";
 import { validateRegisterInput } from "../utils/validateRegisterInput";
@@ -70,7 +70,7 @@ export class UserResolver {
         };
       }
 
-      const hashedPassword = await argon2.hash(password);
+      const hashedPassword = await bcrypt.hashSync(password, 10);
 
       const newUser = await User.create({
         username,
@@ -123,9 +123,9 @@ export class UserResolver {
           ],
         };
       }
-      const passwordValid = await argon2.verify(
-        existingUser.password,
-        password
+      const passwordValid = await bcrypt.compareSync(
+        password,
+        existingUser.password
       );
       if (!passwordValid) {
         return {
@@ -181,7 +181,7 @@ export class UserResolver {
     const user = await User.findOne({ email: forgotPasswordInput.email });
     if (!user) return true;
     const resetToken = uuidv4();
-    const hashResetToken = await argon2.hash(resetToken);
+    const hashResetToken = await bcrypt.hashSync(resetToken, 10);
 
     // save token to db
     await new TokenModel({
@@ -232,9 +232,9 @@ export class UserResolver {
             },
           ],
         };
-      const resetPasswordTokenValid = argon2.verify(
-        resetPasswordTokenRecord.token,
-        token
+      const resetPasswordTokenValid = bcrypt.compareSync(
+        token,
+        resetPasswordTokenRecord.token
       );
       if (!resetPasswordTokenValid) {
         return {
@@ -265,7 +265,10 @@ export class UserResolver {
         };
       }
 
-      const updatePassword = await argon2.hash(changePasswordInput.newPassword);
+      const updatePassword = await bcrypt.hashSync(
+        changePasswordInput.newPassword,
+        10
+      );
       await User.update({ id: userIdNum }, { password: updatePassword });
       await resetPasswordTokenRecord.deleteOne();
       req.session.userId = user.id;

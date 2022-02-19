@@ -20,6 +20,7 @@ const port = process.env.PORT || 3000;
 
 const listen = async () => {
   const connection = await connectPGSQL();
+  if (__prod__) await connection?.runMigrations();
   await connectMG();
   // test send email
   const app = express();
@@ -27,7 +28,9 @@ const listen = async () => {
 
   app.use(
     cors({
-      origin: "http://localhost:3000",
+      origin: __prod__
+        ? process.env.CORS_ORIGIN_PROD
+        : process.env.CORS_ORIGIN_DEV,
       credentials: true,
     })
   );
@@ -43,12 +46,17 @@ const listen = async () => {
         httpOnly: true, // frontend cant access cookie
         secure: __prod__, // cookie only work on https
         sameSite: "lax",
+        domain: __prod__ ? process.env.CORS_ORIGIN_PROD : undefined,
       },
       secret: process.env.SESSION_SECRET as string,
       saveUninitialized: false, // ko save session emty
       resave: false,
     })
   );
+
+  app.get("/", (_req, res) => {
+    res.send("<h1>Hello World!</h1>");
+  });
 
   const apolloServer = new ApolloServer({
     schema: await buildSchema({
