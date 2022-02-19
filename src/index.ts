@@ -3,7 +3,6 @@ import "reflect-metadata";
 import express from "express";
 import session from "express-session";
 import MongoStore from "connect-mongo";
-import connectMSSQL from "./config/mssqlConnect/connect";
 import connectMG from "./config/mongoConnect/connect";
 import { ApolloServer } from "apollo-server-express";
 import { buildSchema } from "type-graphql";
@@ -14,11 +13,13 @@ import { COOKIE_NAME, __prod__ } from "./constants";
 import { PostResolver } from "./resolvers/post";
 import cors from "cors";
 import { Context } from "./types/Context";
+import { buildDataLoaders } from "./utils/dataLoaders";
+import connectPGSQL from "./config/pgsqlConnect/connect";
 
 const port = process.env.PORT || 3000;
 
 const listen = async () => {
-  const connection = await connectMSSQL();
+  const connection = await connectPGSQL();
   await connectMG();
   // test send email
   const app = express();
@@ -54,7 +55,12 @@ const listen = async () => {
       resolvers: [HelloResolver, UserResolver, PostResolver],
       validate: false,
     }),
-    context: ({ req, res }): Context => ({ req, res, connection }),
+    context: ({ req, res }): Context => ({
+      req,
+      res,
+      connection,
+      dataLoader: buildDataLoaders(),
+    }),
     plugins: [ApolloServerPluginLandingPageGraphQLPlayground()],
   });
 

@@ -38,14 +38,25 @@ export class PostResolver {
   }
 
   @FieldResolver((_return) => User)
-  async user(@Root() root: Post) {
-    return await User.findOne({ id: root.userId });
+  async user(
+    @Root() root: Post,
+    @Ctx() { dataLoader: { userLoaders } }: Context
+  ) {
+    return await userLoaders.load(root.userId);
   }
 
   @FieldResolver((_return) => Int)
-  async voteValue(@Root() root: Post, @Ctx() { req }: Context) {
+  async voteValue(
+    @Root() root: Post,
+    @Ctx() { req, dataLoader: { voteTypeLoaders } }: Context
+  ) {
     if (!req.session.userId) return 0;
-    const existingVote = await VotePost.findOne({
+    // const existingVote = await VotePost.findOne({
+    //   postId: root.id,
+    //   userId: req.session.userId,
+    // });
+
+    const existingVote = await voteTypeLoaders.load({
       postId: root.id,
       userId: req.session.userId,
     });
@@ -221,47 +232,61 @@ export class PostResolver {
       connection,
     }: Context
   ): Promise<PostMutationResponse> {
-    return await connection.transaction(async (transactionEntityManager) => {
-      let post = await transactionEntityManager.findOne(Post, postId);
-      // post not found
-      if (!post) {
-        throw new UserInputError("post not found");
-      }
+    if (connection) {
+      return await connection.transaction(async (transactionEntityManager) => {
+        let post = await transactionEntityManager.findOne(Post, postId);
+        // post not found
+        if (!post) {
+          throw new UserInputError("post not found");
+        }
 
-      // post existing vote
-      const existingVote = await transactionEntityManager.findOne(VotePost, {
-        postId,
-        userId,
-      });
-      if (existingVote && existingVote.value !== inputVoteValue) {
-        await transactionEntityManager.save(VotePost, {
-          ...existingVote,
-          value: inputVoteValue,
-        });
-
-        post = await transactionEntityManager.save(Post, {
-          ...post,
-          points: post.points + 2 * inputVoteValue,
-        });
-      }
-
-      if (!existingVote) {
-        const newVote = transactionEntityManager.create(VotePost, {
-          userId,
+        // post existing vote
+        const existingVote = await transactionEntityManager.findOne(VotePost, {
           postId,
-          value: inputVoteValue,
+          userId,
         });
-        await transactionEntityManager.save(newVote);
-        post.points = post.points + inputVoteValue;
-        post = await transactionEntityManager.save(post);
-      }
+        if (existingVote && existingVote.value !== inputVoteValue) {
+          await transactionEntityManager.save(VotePost, {
+            ...existingVote,
+            value: inputVoteValue,
+          });
 
-      return {
-        code: 200,
-        success: true,
-        message: "Post voted",
-        post,
-      };
-    });
+          post = await transactionEntityManager.save(Post, {
+            ...post,
+            points: post.points + 2 * inputVoteValue,
+          });
+        }
+
+        if (!existingVote) {
+          const newVote = transactionEntityManager.create(VotePost, {
+            userId,
+            postId,
+            value: inputVoteValue,
+          });
+          await transactionEntityManager.save(newVote);
+          post.points = post.points + inputVoteValue;
+          post = await transactionEntityManager.save(post);
+        }
+
+        return {
+          code: 200,
+          success: true,
+          message: "Post voted",
+          post,
+        };
+      });
+    }
+    return {
+      code: 500,
+      success: false,
+      message: "Server Error",
+      post: undefined,
+      errors: [
+        {
+          field: "server",
+          message: "Server Error",
+        },
+      ],
+    };
   }
 }

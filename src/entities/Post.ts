@@ -23,7 +23,7 @@ export class Post extends BaseEntity {
   @Column()
   userId!: number;
 
-  @Field()
+  @Field((_type) => User)
   @ManyToOne(() => User, (user) => user.posts)
   user: User;
 
@@ -46,10 +46,10 @@ export class Post extends BaseEntity {
   voteValue!: number;
 
   @Field()
-  @CreateDateColumn({ type: "datetimeoffset" })
+  @CreateDateColumn({ type: "timestamptz" })
   createAt: Date;
 
   @Field()
-  @UpdateDateColumn({ type: "datetimeoffset" })
+  @UpdateDateColumn({ type: "timestamptz" })
   updateAt: Date;
 }
